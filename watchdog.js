@@ -6,13 +6,14 @@ import { speak } from './speaker.js';
  * The Sentinel: Watches for real-time changes and triggers audits.
  */
 export function startWatchdog() {
-    const watcher = chokidar.watch('.', {
+    const watchPath = process.cwd();
+    const watcher = chokidar.watch(watchPath, {
         ignored: ['node_modules', '.git', 'agent.log', 'temp_voice.wav', 'ARCHITECTURE.md', 'package.json', 'package-lock.json'],
         persistent: true,
         ignoreInitial: true
     });
 
-    console.log('🛡️  [Sentinel Active] Watching project root and directories...');
+    console.log(`🛡️  [Sentinel Active] Watching project root: ${watchPath}`);
 
     const handleEvent = async (event, path) => {
         if (!path.endsWith('.js') && !path.endsWith('.css')) return;
