@@ -1,5 +1,7 @@
 const fs = require('fs');
 const groq = require('./client');
+const { toolsDefinition, readFileContent } = require('./tools');
+
 
 /**
  * Escanea el directorio actual para obtener una lista legible de archivos,
@@ -63,16 +65,60 @@ async function main() {
     console.log('🚀 Enviando consulta principal...');
 
     try {
+        // Capturamos el mensaje desde la terminal o usamos uno por defecto
+        const userQuestion = process.argv.slice(2).join(' ') || 
+                            'Basado en los archivos que ves, ¿qué crees que estamos construyendo?';
+
+        const messages = [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userQuestion }
+        ];
+
+
         const response = await groq.chat.completions.create({
-            messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: 'Basado en los archivos que ves, ¿qué crees que estamos construyendo?' }
-            ],
-            model: 'llama-3.3-70b-versatile'
+            messages: messages,
+            model: 'llama-3.3-70b-versatile',
+            tools: toolsDefinition,
+            tool_choice: 'auto'
         });
 
-        const content = response.choices[0].message.content;
+        let responseMessage = response.choices[0].message;
+        const toolCalls = responseMessage.tool_calls;
+
+        // Si la IA decide usar una herramienta
+        if (toolCalls) {
+            console.log('🛠️ IA solicitó ejecutar herramientas...');
+            messages.push(responseMessage); // Añadir el mensaje de solicitud de la IA
+
+            for (const toolCall of toolCalls) {
+                const functionName = toolCall.function.name;
+                const functionArgs = JSON.parse(toolCall.function.arguments);
+
+                let result = '';
+                if (functionName === 'readFileContent') {
+                    result = readFileContent(functionArgs.filePath);
+                }
+
+                messages.push({
+                    tool_call_id: toolCall.id,
+                    role: 'tool',
+                    name: functionName,
+                    content: result
+                });
+            }
+
+            // Segunda llamada para procesar los resultados de las herramientas
+            const secondResponse = await groq.chat.completions.create({
+                messages: messages,
+                model: 'llama-3.3-70b-versatile'
+            });
+
+            responseMessage = secondResponse.choices[0].message;
+        }
+
+        const content = responseMessage.content;
         const totalTokens = response.usage.total_tokens;
+
 
         // 3. Verificación de Presupuesto de Tokens
         if (totalTokens > 1500) {
