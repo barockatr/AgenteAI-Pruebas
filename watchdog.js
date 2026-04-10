@@ -3,7 +3,7 @@ import { performAudit } from './chat.js';
 import { speak } from './speaker.js';
 
 /**
- * El Guardián: Vigila cambios en tiempo real y dispara auditorías.
+ * The Sentinel: Watches for real-time changes and triggers audits.
  */
 export function startWatchdog() {
     const watcher = chokidar.watch('.', {
@@ -12,26 +12,26 @@ export function startWatchdog() {
         ignoreInitial: true
     });
 
-    console.log('🛡️  [Guardián Activo] Vigilando raíz y directorios del proyecto...');
+    console.log('🛡️  [Sentinel Active] Watching project root and directories...');
 
     const handleEvent = async (event, path) => {
         if (!path.endsWith('.js') && !path.endsWith('.css')) return;
 
-        console.log(`📡 [Evento detectado: ${event}] en ${path}`);
+        console.log(`📡 [Event detected: ${event}] in ${path}`);
         
         const auditResult = await performAudit(path, true);
         
-        // Diccionario de alertas ampliado para máxima sensibilidad
-        const alertKeywords = ['crítico', 'vulnerabilidad', 'riesgo', 'seguridad', 'xss', 'ataque', 'advertencia', 'peligro'];
+        // Expanded alert dictionary for maximum sensitivity
+        const alertKeywords = ['critical', 'vulnerability', 'risk', 'security', 'xss', 'attack', 'warning', 'danger'];
         const lowResult = auditResult.toLowerCase();
         
         const hasRisk = alertKeywords.some(keyword => lowResult.includes(keyword));
 
         if (hasRisk) {
-            speak(`Alerta detectada en ${path}. Revisa la consola.`);
-            console.warn(`\n⚠️  [ALERTA DEL GUARDIÁN] Hallazgo en ${path}:\n${auditResult.substring(0, 300)}...\n`);
+            speak(`Security alert detected in ${path}. Check the console.`);
+            console.warn(`\n⚠️  [SENTINEL ALERT] Finding in ${path}:\n${auditResult.substring(0, 300)}...\n`);
         } else {
-            console.log(`✅ [Guardián] ${path} revisado sin riesgos críticos.`);
+            console.log(`✅ [Sentinel] ${path} reviewed with no critical risks.`);
         }
     };
 

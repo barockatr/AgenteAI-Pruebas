@@ -4,8 +4,8 @@ import mic from 'mic';
 import groq from './client.js';
 
 /**
- * Graba audio por 6 segundos y lo transcribe usando Groq Whisper (ESM).
- * @returns {Promise<string>} La transcripción del audio o un mensaje de error.
+ * Records audio for 6 seconds and transcribes it using Groq Whisper (ESM).
+ * @returns {Promise<string>} The audio transcription or an error message.
  */
 export async function listenAndTranscribe() {
     return new Promise((resolve) => {
@@ -22,14 +22,14 @@ export async function listenAndTranscribe() {
 
         micInputStream.pipe(outputFileStream);
 
-        console.log('\n🎤 [Escuchando... 6s]');
+        console.log('\n🎤 [Listening... 6s]');
         micInstance.start();
 
         setTimeout(async () => {
             micInstance.stop();
             outputFileStream.end();
 
-            console.log('⏳ Procesando audio...');
+            console.log('⏳ Processing audio...');
 
             try {
                 const transcription = await groq.audio.transcriptions.create({
@@ -42,13 +42,13 @@ export async function listenAndTranscribe() {
 
                 resolve(transcription.text);
             } catch (error) {
-                console.error('Error al transcribir:', error.message);
+                console.error('Transcription error:', error.message);
                 resolve('');
             }
         }, 6000);
 
         micInputStream.on('error', (err) => {
-            console.error('Error con el micrófono:', err.message);
+            console.error('Microphone error:', err.message);
             micInstance.stop();
             resolve('');
         });

@@ -6,7 +6,7 @@ const PROTECTED_FILES = ['.env', 'package.json', 'package-lock.json'];
 const IGNORE_LIST = ['node_modules', '.git', 'package-lock.json', 'agent.log'];
 
 /**
- * LÓGICA DE VALIDACIÓN (SRP)
+ * VALIDATION LOGIC (SRP)
  */
 const security = {
     isBlacklisted(filePath) {
@@ -16,19 +16,19 @@ const security = {
     validatePath(filePath) {
         const absolutePath = isAbsolute(filePath) ? filePath : join(process.cwd(), filePath);
         if (!absolutePath.startsWith(process.cwd())) {
-            throw new Error('Acceso denegado: Fuera del directorio del proyecto.');
+            throw new Error('Access denied: Outside project directory.');
         }
         return absolutePath;
     }
 };
 
 /**
- * HERRAMIENTAS DE ARCHIVOS (Async / ESM)
+ * FILE TOOLS (Async / ESM)
  */
 export async function readFileContent(filePath) {
     try {
         const absolutePath = security.validatePath(filePath);
-        if (!existsSync(absolutePath)) return `Error: El archivo "${filePath}" no existe.`;
+        if (!existsSync(absolutePath)) return `Error: The file "${filePath}" does not exist.`;
         return await readFile(absolutePath, 'utf8');
     } catch (error) {
         return `Error: ${error.message}`;
@@ -39,10 +39,10 @@ export async function createOrUpdateFile(filePath, content) {
     try {
         const absolutePath = security.validatePath(filePath);
         if (security.isBlacklisted(absolutePath)) {
-            return `Acceso denegado: "${basename(absolutePath)}" es un archivo protegido.`;
+            return `Access denied: "${basename(absolutePath)}" is a protected file.`;
         }
         await writeFile(absolutePath, content, 'utf8');
-        return `Éxito: Archivo "${filePath}" guardado.`;
+        return `Success: File "${filePath}" saved.`;
     } catch (error) {
         return `Error: ${error.message}`;
     }
@@ -70,12 +70,12 @@ export async function listDirectoryRecursive(dir = process.cwd(), indent = '') {
         }
         return results;
     } catch (error) {
-        return `Error al listar: ${error.message}`;
+        return `Error listing: ${error.message}`;
     }
 }
 
 /**
- * NUEVA HERRAMIENTA: DOCUMENTACIÓN ARQUITECTÓNICA
+ * NEW TOOL: ARCHITECTURE DOCUMENTATION
  */
 export async function updateArchitectureDocs(issue, fix) {
     try {
@@ -84,27 +84,27 @@ export async function updateArchitectureDocs(issue, fix) {
         
         let header = '';
         if (!existsSync(archFile)) {
-            header = '# Registro de Arquitectura y Decisiones Técnicas\n\nEste archivo registra hallazgos críticos detectados por el Arquitecto Senior.\n\n| Fecha | Hallazgo / Issue | Solución / Mejora | Severidad |\n|-------|------------------|-------------------|-----------|\n';
+            header = '# Architecture and Technical Decisions Log\n\nThis file logs critical findings detected by the Senior Architect.\n\n| Date | Finding / Issue | Solution / Improvement | Severity |\n|------|-----------------|------------------------|----------|\n';
         }
 
         const entry = `| ${timestamp} | ${issue} | ${fix} | ALTA |\n`;
         await appendFile(archFile, header + entry, 'utf8');
         
-        return `Éxito: ARCHITECTURE.md actualizado con el hallazgo: "${issue}"`;
+        return `Success: ARCHITECTURE.md updated with finding: "${issue}"`;
     } catch (error) {
-        return `Error al actualizar documentación: ${error.message}`;
+        return `Error updating documentation: ${error.message}`;
     }
 }
 
 /**
- * DEFINICIÓN DE HERRAMIENTAS (JSON Schema)
+ * TOOLS DEFINITION (JSON Schema)
  */
 export const toolsDefinition = [
     {
         type: "function",
         function: {
             name: "readFileContent",
-            description: "Lee el contenido de un archivo (Async).",
+            description: "Reads the content of a file (Async).",
             parameters: {
                 type: "object",
                 properties: { filePath: { type: "string" } },
@@ -116,7 +116,7 @@ export const toolsDefinition = [
         type: "function",
         function: {
             name: "createOrUpdateFile",
-            description: "Escribe contenido en un archivo (Async).",
+            description: "Writes content to a file (Async).",
             parameters: {
                 type: "object",
                 properties: { 
@@ -131,7 +131,7 @@ export const toolsDefinition = [
         type: "function",
         function: {
             name: "listDirectoryRecursive",
-            description: "Mapa jerárquico del proyecto (Async).",
+            description: "Hierarchical project map (Async).",
             parameters: { type: "object", properties: {} }
         }
     },
@@ -139,7 +139,7 @@ export const toolsDefinition = [
         type: "function",
         function: {
             name: "auditFile",
-            description: "Auditoría profunda de seguridad y calidad.",
+            description: "Deep security and quality audit.",
             parameters: {
                 type: "object",
                 properties: { filePath: { type: "string" } },
@@ -151,14 +151,28 @@ export const toolsDefinition = [
         type: "function",
         function: {
             name: "updateArchitectureDocs",
-            description: "Registra hallazgos técnicos importantes en ARCHITECTURE.md.",
+            description: "Logs important technical findings in ARCHITECTURE.md.",
             parameters: {
                 type: "object",
                 properties: {
-                    issue: { type: "string", description: "El problema detectado." },
-                    fix: { type: "string", description: "La solución aplicada o propuesta." }
+                    issue: { type: "string", description: "The detected issue." },
+                    fix: { type: "string", description: "The applied or proposed solution." }
                 },
                 required: ["issue", "fix"]
+            }
+        }
+    },
+    {
+        type: "function",
+        function: {
+            name: "webSearch",
+            description: "Performs a technical web search. Use it to search for new technologies, versions, documentation, or recent news.",
+            parameters: {
+                type: "object",
+                properties: {
+                    query: { type: "string", description: "The query to search on the web." }
+                },
+                required: ["query"]
             }
         }
     }

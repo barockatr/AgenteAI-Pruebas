@@ -1,20 +1,20 @@
 import say from 'say';
 
 /**
- * Convierte texto a voz usando el motor nativo del sistema (ESM).
- * @param {string} text - El texto a leer.
+ * Converts text to speech using the native system engine (ESM).
+ * @param {string} text - The text to read.
  */
 export function speak(text) {
     if (!text) return;
 
     try {
-        console.log('🔊 [Voz de Autoridad Activa]');
+        console.log('🔊 [Voice of Authority Active]');
         say.speak(text, null, 1.0, (err) => {
             if (err) {
-                console.error('Error en la síntesis de voz:', err.message);
+                console.error('Speech synthesis error:', err.message);
             }
         });
     } catch (error) {
-        console.error('No se pudo activar la salida de voz:', error.message);
+        console.error('Could not activate voice output:', error.message);
     }
 }

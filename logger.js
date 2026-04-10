@@ -4,9 +4,9 @@ import { join } from 'path';
 const LOG_FILE = join(process.cwd(), 'agent.log');
 
 /**
- * Registra un evento en el archivo de auditoría agent.log de forma asíncrona.
- * @param {string} eventType - Tipo de evento.
- * @param {any} data - Información adicional a registrar.
+ * Logs an event asynchronously to the agent.log audit file.
+ * @param {string} eventType - Event type.
+ * @param {any} data - Additional information to log.
  */
 export async function logAction(eventType, data) {
     try {
@@ -15,6 +15,6 @@ export async function logAction(eventType, data) {
 
         await appendFile(LOG_FILE, logEntry, 'utf8');
     } catch (error) {
-        console.error('Error al escribir en el log:', error.message);
+        console.error('Error writing to log:', error.message);
     }
 }

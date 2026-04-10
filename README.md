@@ -1,87 +1,76 @@
-# 🤖 Agente IA Autónomo - Arquitectura Senior
+# 🤖 AI Agent - Autonomous DevSecOps Assistant
 
-[![Node.js](https://img.shields.io/badge/Node.js-v18+-green.svg)](https://nodejs.org/)
-[![Groq](https://img.shields.io/badge/Inference-Groq_Cloud-orange.svg)](https://groq.com/)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Style](https://img.shields.io/badge/Code_Style-Senior_Architect-purple.svg)](#)
+![Node.js](https://img.shields.io/badge/Node.js-v18+-green?style=for-the-badge&logo=node.js)
+![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
+![Groq Engine](https://img.shields.io/badge/Groq-Powered-orange?style=for-the-badge&logo=groq)
+![Tavily Connected](https://img.shields.io/badge/Tavily-Investigator-purple?style=for-the-badge)
+![Voice-Enabled](https://img.shields.io/badge/Voice_TTS-Enabled-ff69b4?style=for-the-badge&logo=audio)
 
-Un agente de IA autónomo diseñado para la gestión, auditoría y desarrollo proactivo de software. Construido sobre una arquitectura **Híbrida de Modelos** y un sistema de **Vigilancia Reactiva**.
-
----
-
-## 🏛️ Arquitectura del Sistema
-
-El agente utiliza una estructura modular basada en **ES Modules (ESM)** y asincronismo total para garantizar una ejecución no bloqueante.
-
-### 🧠 El Estratega (Model Router)
-Optimización inteligente de inferencia:
-- **Diálogo REPL**: Impulsado por `llama3-8b` para respuestas instantáneas y bajo consumo.
-- **Arquitecto / Código**: Intervención de `llama3-70b` para razonamiento profundo y generación de código de alta fidelidad.
-
-### 🛡️ El Guardián (Watchdog)
-Sistema de vigilancia en tiempo real alimentado por `chokidar`.
-- Monitoriza cambios en archivos `.js` y `.css`.
-- Ejecuta **Auditorías Silenciosas** al detectar un guardado.
-- Interrumpe mediante **Voz de Autoridad** si detecta vulnerabilidades críticas o riesgos de seguridad.
-
-### 🔊 Interfaz de Voz de Autoridad
-Salida de audio integrada que proporciona feedback auditivo sobre:
-- Hallazgos de seguridad.
-- Resúmenes de auditoría arquitectónica.
-- Confirmaciones de estado del sistema.
+> _A hybrid assistant that doesn't just chat, but monitors your code in real-time and performs autonomous technical research._
 
 ---
 
-## 🚀 Capacidades Destacadas
+## ✨ Core Features
 
-- **Auditoría Autónoma**: Detección de XSS, cuellos de botella y violaciones de Clean Code.
-- **Documentación Viva**: Mantenimiento automático de `ARCHITECTURE.md` con hallazgos históricos.
-- **Modo Híbrido**: Entrada/Salida dual entre Texto (REPL) y Voz (Whisper + TTS).
-- **Seguridad Blindada**: Blacklist de archivos críticos y protección contra Path Traversal.
+*   🛡️ **Shield Guard (Sentinel):** Proactive file system monitoring. Detects changes in your documents (`.js`, `.css`, etc.) and executes an instant security and architecture audit using the 70B model, entirely in the background.
+*   🧠 **Smart Orchestrator:** Intelligent model routing. Relies on **Llama-3.1-8B-Instant** for ultra-low latency conversational interactions, automatically scaling to **Llama-3.3-70B-Versatile** for deep reasoning, heavy code reviews, or crucial architectural decisions.
+*   🌐 **Web Investigator:** Connected in real-time with the **Tavily API**. The assistant autonomously invokes internet searches the moment it detects a prompt regarding new libraries, unknown errors, or when it requires external documentation outside its local knowledge base.
+*   🗣️ **Voice of Authority:** Advanced TTS (Text-to-Speech) system that proactively reports findings from the Sentinel or confirms when web investigations are complete. Forget visual fatigue; let the assistant notify you audibly.
 
 ---
 
-## 🛠️ Instalación y Uso
+## ⚙️ Setup & Installation
 
-### Requisitos
-- Node.js v18 o superior.
-- Una API Key de [Groq Cloud](https://console.groq.com/).
+Follow these steps to run the assistant locally on your machine.
 
-### Configuración
-1. Clona el repositorio.
-2. Crea un archivo `.env` en la raíz:
-   ```env
-   GROQ_API_KEY=tu_clave_aqui
-   ```
-3. Instala las dependencias:
+1. **Clone the repository** and install Node.js dependencies:
    ```bash
+   git clone <your-repository>
+   cd AgenteIA-Pruebas
    npm install
    ```
 
-### Ejecución
-Puedes iniciar el agente globalmente (si se instaló) o mediante:
+2. **System Dependencies Installation:**  
+   For the **Voice of Authority** module to work properly, it's imperative to have audio players installed at the system level so they can be orchestrated by Node.js.  
+   *   *(Recommended on Windows)*: Ensure you have native tools ready (usually out-of-the-box for libraries like `say`).
+   *   *(On WSL/Linux Unix)*: Install packages like `mpg123` (`sudo apt install mpg123`).
+
+3. **Environment Setup:**
+   Create or adjust the `.env` file in your project root and inject your tokens:
+   ```env
+   GROQ_API_KEY=your_groq_api_key_here
+   TAVILY_API_KEY=your_tavily_api_key_here
+   ```
+
+---
+
+## 🎮 Usage
+
+Start the intelligent bridge by running:
 ```bash
+npm start
+# or
 node chat.js
+# or custom CLI binary command
+agente
 ```
 
-### Comandos REPL
-- `/voice`: Activa la escucha activa (6 segundos).
-- `/clear`: Limpia la memoria de la sesión.
-- `/usage`: Muestra el consumo acumulado de tokens.
-- `salir` o `exit`: Cierra la sesión.
+### Interaction Commands
+Once interacting with the **Orchestrator**, you have a dual console (General Chat + Meta Commands):
+
+*   Provide your prompt freely and press `Enter`. If web searches are required, the investigator will handle them in the background.
+*   `/voice`: Activates ambient listening with your microphone and transcodes to text (Listener).
+*   `/clear`: Purges and resets the memory stack to prevent mixing long context flows.
+*   `exit` / `salir`: Stops the orchestrator and cleanly disconnects the Sentinel watchdog.
+
+### 📊 Token Awareness
+*   `/usage`: This special command allows you to monitor the **accumulated token consumption** during your session. A vital tool for _cost-aware_ programmers in production environments, providing full visibility over API expenditure.
 
 ---
 
-## 📜 Reglas de ADN (Architect Brain)
-- **ESM Obligatorio**: Uso estricto de `import/export`.
-- **Async First**: Prohibición de métodos `sync` que bloqueen el event loop.
-- **No var**: Uso exclusivo de `const` y `let`.
-- **Clean Code**: Fomento del Principio de Responsabilidad Única.
+## 🏗️ Architecture Section
 
----
+The core of the framework is entirely migrated to the modern **ESM (ECMAScript Modules)** standard. The entire pipeline—from conversational I/O to the reactive file monitoring of the Sentinel—is built to operate purely on an **Async/Non-blocking** paradigm. This guarantees the Node Event Loop never experiences prolonged blocking or bottlenecks from remote AI API calls.
 
-## ⚖️ Licencia
-Este proyecto está bajo la licencia MIT. Siéntete libre de colaborar y evolucionar este "Cerebro Digital".
-
----
-*Construido con ❤️ por un Agente IA y su Senior Architect.*
+### 🧬 Self-Healing Note (Resiliency)
+This project exhibits robustness to adapt to the fast-paced tech ecosystem. It features configuration elasticity to iterate from deprecated LLMs to bleeding-edge versions (e.g. Llama 3 -> Llama 3.1 / 3.3). Centralizing context variables ensures that model upgrades are executed as micro patches with zero operational downtime.

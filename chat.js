@@ -10,10 +10,11 @@ import { logAction } from './logger.js';
 import { speak } from './speaker.js';
 import { listenAndTranscribe } from './listener.js';
 import { startWatchdog } from './watchdog.js';
+import { webSearch } from './researcher.js';
 
-// Modelos Groq
-const MODEL_CHAT = 'llama3-8b-8192';
-const MODEL_ARCHITECT = 'llama3-70b-8192';
+// Groq Models
+const MODEL_CHAT = 'llama-3.1-8b-instant';
+const MODEL_ARCHITECT = 'llama-3.3-70b-versatile';
 
 let sessionTokens = 0;
 
@@ -22,38 +23,38 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const ARCHITECT_RULES = `
-- PROHIBIDO usar 'var'. Usa siempre 'const' o 'let'.
-- Prioridad absoluta a ESM (ES Modules) sobre CommonJS.
-- Principio de Responsabilidad Única: Funciones cortas y específicas.
-- Seguridad: No usar innerHTML (riesgo XSS).
-- Rendimiento: Preferir funciones asíncronas (No bloqueantes).
+- FORBIDDEN to use 'var'. Always use 'const' or 'let'.
+- Absolute priority to ESM (ES Modules) over CommonJS.
+- Single Responsibility Principle: Short and specific functions.
+- Security: Do not use innerHTML (XSS risk).
+- Performance: Prefer asynchronous functions (Non-blocking).
 `;
 
 const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
-    prompt: 'Tú > '
+    prompt: 'You > '
 });
 
 let conversationHistory = [];
 const MAX_MEMORY = 15;
 
 /** 
- * Obtiene el mapa del proyecto (Async)
+ * Gets the project map (Async)
  */
 async function getProjectMap() {
     try {
         return await listDirectoryRecursive();
     } catch (error) {
-        return 'No se pudo leer el mapa.';
+        return 'Could not read the map.';
     }
 }
 
 /** 
- * Autodiagnóstico Inicial (ESM/Async)
+ * Initial Self-Diagnostic (ESM/Async)
  */
 async function runSelfTest() {
-    console.log('🔍 Iniciando autodiagnóstico (Async/ESM)...');
+    console.log('🔍 Starting self-diagnostic (Async/ESM)...');
     try {
         const testResponse = await groq.chat.completions.create({
             messages: [{ role: 'user', content: 'ping' }],
@@ -61,18 +62,18 @@ async function runSelfTest() {
             max_tokens: 5
         });
         const fingerprint = testResponse.system_fingerprint || 'fp_active_session';
-        console.log(`✅ Conexión establecida. Fingerprint: ${fingerprint}\n`);
+        console.log(`✅ Connection established. Fingerprint: ${fingerprint}\n`);
     } catch (error) {
-        console.error('❌ FALLO CRÍTICO:', error.message);
+        console.error('❌ CRITICAL FAILURE:', error.message);
         process.exit(1);
     }
 }
 
 /** 
- * Auditoría profunda (Arquitecto)
+ * Deep Audit (Architect)
  */
 export async function performAudit(filePath, silent = false) {
-    if (!silent) console.log(`🔎 Auditando ${filePath}...`);
+    if (!silent) console.log(`🔎 Auditing ${filePath}...`);
 
     try {
         const content = await readFileContent(filePath);
@@ -82,42 +83,37 @@ export async function performAudit(filePath, silent = false) {
             messages: [
                 { 
                     role: 'system', 
-                    content: `Eres un Arquitecto de Software Senior. Analiza buscando: Vulnerabilidades, Rendimiento, Clean Code.\nReglas:\n${ARCHITECT_RULES}` 
+                    content: `You are a Senior Software Architect. Analyze looking for: Vulnerabilities, Performance, Clean Code.\nRules:\n${ARCHITECT_RULES}` 
                 },
-                { role: 'user', content: `Audita:\n\n${content}` }
+                { role: 'user', content: `Audit:\n\n${content}` }
             ],
             model: MODEL_ARCHITECT
         });
 
         const auditResult = auditResponse.choices[0].message.content;
         sessionTokens += auditResponse.usage.total_tokens;
-        await logAction('Auditoría', { file: filePath, result: auditResult });
+        await logAction('Audit', { file: filePath, result: auditResult });
 
         if (!silent) {
             const summary = auditResult.split('\n').filter(l => l.trim()).slice(0, 2).join(' ');
-            speak(`Atención. He auditado ${filePath}. ${summary}`);
+            speak(`Attention. I have audited ${filePath}. ${summary}`);
         }
 
 
-        return `### Revisión de Arquitectura para ${filePath}:\n${auditResult}`;
+        return `### Architecture Review for ${filePath}:\n${auditResult}`;
     } catch (error) {
         return `Error: ${error.message}`;
     }
 }
 
 /** 
- * Turno de Chat
+ * Chat Turn
  */
 async function processInteraction(userInput) {
     const projectMap = await getProjectMap();
     const systemPrompt = { 
         role: 'system', 
-        content: `Eres un asistente Senior (ESM/Async). Mapa del proyecto:\n${projectMap}
-        
-        REGLAS ADN:
-        ${ARCHITECT_RULES}
-        
-        PROACTIVIDAD: Al modificar archivos, incluye 'Revisión de Arquitectura'. Si el hallazgo es importante, usa 'updateArchitectureDocs'.` 
+        content: `You are a Senior Assistant. Use tools when necessary.\nProject map:\n${projectMap}\n\nRULES:\n${ARCHITECT_RULES}` 
     };
 
     if (conversationHistory.length === 0 || conversationHistory[0].role !== 'system') {
@@ -125,7 +121,7 @@ async function processInteraction(userInput) {
     }
 
     conversationHistory.push({ role: 'user', content: userInput });
-    await logAction('Pregunta', userInput);
+    await logAction('Question', userInput);
 
     try {
         let response = await groq.chat.completions.create({
@@ -141,15 +137,22 @@ async function processInteraction(userInput) {
 
 
         if (toolCalls) {
-            console.log('🛠️  Ejecutando herramientas (Async)...');
+            console.log('🛠️  Executing tools (Async)...');
             conversationHistory.push(responseMessage);
 
             for (const toolCall of toolCalls) {
-                const { name, arguments: argsJson } = toolCall.function;
-                const args = JSON.parse(argsJson);
+                const name = toolCall.function?.name || toolCall.name;
+                const argsJson = toolCall.function?.arguments || "{}";
+                let args = {};
+                try {
+                    args = typeof argsJson === 'string' ? JSON.parse(argsJson) : argsJson;
+                } catch (e) {
+                    console.error(`⚠️  Warning: Invalid JSON in arguments for ${name}.`);
+                }
+                const callId = toolCall.id || `call_${Date.now()}`;
                 let result = '';
 
-                console.log(`  └─ Herramienta: ${name}`);
+                console.log(`  └─ Tool: ${name}`);
                 await logAction('Tool_Call', { function: name, args });
 
                 if (name === 'readFileContent') result = await readFileContent(args.filePath);
@@ -157,12 +160,13 @@ async function processInteraction(userInput) {
                 else if (name === 'listDirectoryRecursive') result = await listDirectoryRecursive();
                 else if (name === 'auditFile') result = await performAudit(args.filePath);
                 else if (name === 'updateArchitectureDocs') result = await updateArchitectureDocs(args.issue, args.fix);
+                else if (name === 'webSearch') result = await webSearch(args.query);
 
                 conversationHistory.push({
-                    tool_call_id: toolCall.id,
+                    tool_call_id: callId,
                     role: 'tool',
                     name: name,
-                    content: result
+                    content: String(result)
                 });
             }
 
@@ -176,13 +180,13 @@ async function processInteraction(userInput) {
 
 
         const content = responseMessage.content;
-        console.log(`\n🤖 IA: ${content}\n`);
-        await logAction('Respuesta', { content, tokens: response.usage.total_tokens });
+        console.log(`\n🤖 AI: ${content}\n`);
+        await logAction('Response', { content, tokens: response.usage.total_tokens });
 
-        if (content.includes('Revisión de Arquitectura')) {
-            const architectPart = content.split('Revisión de Arquitectura')[1];
+        if (content.includes('Architecture Review')) {
+            const architectPart = content.split('Architecture Review')[1];
             const summary = architectPart.split('\n').filter(l => l.trim()).slice(0, 2).join(' ');
-            speak(`Arquitecto informa. ${summary}`);
+            speak(`Architect reports. ${summary}`);
         }
 
         conversationHistory.push(responseMessage);
@@ -201,9 +205,9 @@ async function processInteraction(userInput) {
  */
 async function startApp() {
     await runSelfTest();
-    startWatchdog(); // Inicia el Guardián automáticamente
-    console.log('--- AGENTE INTELIGENTE (WATCHDOG/STRATEGIST) ACTIVO ---');
-    console.log('Comandos: salir, exit, /clear, /voice, /usage\n');
+    startWatchdog(); // Starts Watchdog automatically
+    console.log('--- INTELLIGENT AGENT (WATCHDOG/STRATEGIST) ACTIVE ---');
+    console.log('Commands: exit, /clear, /voice, /usage\n');
 
     rl.prompt();
 
@@ -212,14 +216,14 @@ async function startApp() {
         if (input.toLowerCase() === 'exit' || input.toLowerCase() === 'salir') process.exit(0);
         if (input === '/clear') {
             conversationHistory = [];
-            console.log('🧹 Memoria limpia.');
+            console.log('🧹 Memory cleared.');
         } else if (input === '/usage') {
-            console.log(`📊 Consumo de sesión: ${sessionTokens} tokens.`);
+            console.log(`📊 Session consumption: ${sessionTokens} tokens.`);
         } else if (input.toLowerCase() === '/voice') {
 
             const transcript = await listenAndTranscribe();
             if (transcript) {
-                console.log(`🎤 Dicho: "${transcript}"`);
+                console.log(`🎤 Said: "${transcript}"`);
                 await processInteraction(transcript);
             }
         } else if (input) {
