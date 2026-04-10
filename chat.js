@@ -9,8 +9,15 @@ import { toolsDefinition, readFileContent, createOrUpdateFile, listDirectoryRecu
 import { logAction } from './logger.js';
 import { speak } from './speaker.js';
 import { listenAndTranscribe } from './listener.js';
-import { startWatchdog } from './watchdog.js';
+import { vigilancia } from './watchdog.js';
 import { webSearch } from './researcher.js';
+import dotenv from 'dotenv';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Configuración de rutas absolutas para el entorno
+dotenv.config({ path: join(__dirname, '.env') });
 
 // Groq Models
 const MODEL_CHAT = 'llama-3.1-8b-instant';
@@ -19,8 +26,6 @@ const MODEL_ARCHITECT = 'llama-3.3-70b-versatile';
 let sessionTokens = 0;
 
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 const ARCHITECT_RULES = `
 - FORBIDDEN to use 'var'. Always use 'const' or 'let'.
@@ -205,7 +210,7 @@ async function processInteraction(userInput) {
  */
 async function startApp() {
     await runSelfTest();
-    startWatchdog(); // Starts Watchdog automatically
+    vigilancia.iniciar(); // Inicia Vigilancia Automáticamente
     console.log('--- INTELLIGENT AGENT (WATCHDOG/STRATEGIST) ACTIVE ---');
     console.log('Commands: exit, /clear, /voice, /usage\n');
 

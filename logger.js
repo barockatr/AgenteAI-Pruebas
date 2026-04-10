@@ -1,7 +1,11 @@
 import { appendFile } from 'fs/promises';
-import { join } from 'path';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
-const LOG_FILE = join(process.cwd(), 'agent.log');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const LOG_FILE = join(__dirname, 'agent.log');
 
 /**
  * Logs an event asynchronously to the agent.log audit file.

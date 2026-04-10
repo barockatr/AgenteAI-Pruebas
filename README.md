@@ -25,7 +25,7 @@ Follow these steps to run the assistant locally on your machine.
 
 1. **Clone the repository** and install Node.js dependencies:
    ```bash
-   git clone <your-repository>
+   git clone <https://github.com/barockatr/AgenteAI-Pruebas.git>
    cd AgenteIA-Pruebas
    npm install
    ```

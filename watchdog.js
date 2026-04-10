@@ -1,43 +1,38 @@
+"use strict";
+
 import chokidar from 'chokidar';
-import { performAudit } from './chat.js';
-import { speak } from './speaker.js';
+import { logAction } from './logger.js';
 
 /**
- * The Sentinel: Watches for real-time changes and triggers audits.
+ * Módulo de Vigilancia (Watchdog)
+ * Se encarga de monitorear cambios en el sistema de archivos del proyecto.
  */
-export function startWatchdog() {
-    const watchPath = process.cwd();
-    const watcher = chokidar.watch(watchPath, {
-        ignored: ['node_modules', '.git', 'agent.log', 'temp_voice.wav', 'ARCHITECTURE.md', 'package.json', 'package-lock.json'],
-        persistent: true,
-        ignoreInitial: true
-    });
-
-    console.log(`🛡️  [Sentinel Active] Watching project root: ${watchPath}`);
-
-    const handleEvent = async (event, path) => {
-        if (!path.endsWith('.js') && !path.endsWith('.css')) return;
-
-        console.log(`📡 [Event detected: ${event}] in ${path}`);
+const vigilancia = {
+    /**
+     * Inicia el monitoreo de archivos.
+     */
+    iniciar: () => {
+        console.log('📡 [Watchdog] Sistema de vigilancia activo monitoreando el repositorio...');
         
-        const auditResult = await performAudit(path, true);
-        
-        // Expanded alert dictionary for maximum sensitivity
-        const alertKeywords = ['critical', 'vulnerability', 'risk', 'security', 'xss', 'attack', 'warning', 'danger'];
-        const lowResult = auditResult.toLowerCase();
-        
-        const hasRisk = alertKeywords.some(keyword => lowResult.includes(keyword));
+        const watcher = chokidar.watch('.', {
+            ignored: [
+                /(^|[\/\\])\../, // Ignorar archivos ocultos
+                'node_modules',
+                'agent.log',
+                '.git'
+            ],
+            persistent: true,
+            ignoreInitial: true
+        });
 
-        if (hasRisk) {
-            speak(`Security alert detected in ${path}. Check the console.`);
-            console.warn(`\n⚠️  [SENTINEL ALERT] Finding in ${path}:\n${auditResult.substring(0, 300)}...\n`);
-        } else {
-            console.log(`✅ [Sentinel] ${path} reviewed with no critical risks.`);
-        }
-    };
+        watcher.on('all', async (event, path) => {
+            const timestamp = new Date().toLocaleTimeString();
+            console.log(`[${timestamp}] 🔍 Cambio detectado (${event}): ${path}`);
+            await logAction('Watchdog', { event, path });
+        });
 
-    watcher.on('add', (path) => handleEvent('add', path));
-    watcher.on('change', (path) => handleEvent('change', path));
+        return watcher;
+    }
+};
 
-    return watcher;
-}
+export { vigilancia };
