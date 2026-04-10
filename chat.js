@@ -1,30 +1,36 @@
 const fs = require('fs');
+const readline = require('readline');
 const groq = require('./client');
-const { toolsDefinition, readFileContent } = require('./tools');
+const { toolsDefinition, readFileContent, createOrUpdateFile } = require('./tools');
+const { logAction } = require('./logger');
 
+// Configuración de la interfaz de consola
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: 'Tú > '
+});
+
+// Estado global de la sesión
+let conversationHistory = [];
+const MAX_MEMORY = 15;
 
 /**
- * Escanea el directorio actual para obtener una lista legible de archivos,
- * ignorando carpetas pesadas o irrelevantes.
- * @returns {string} Contexto formateado de los archivos existentes.
+ * Escanea el directorio actual para obtener el contexto de archivos.
  */
 function readProjectContext() {
     try {
-        const ignoreList = ['node_modules', '.git', 'package-lock.json'];
-        const files = fs.readdirSync(__dirname)
+        const ignoreList = ['node_modules', '.git', 'package-lock.json', 'agent.log'];
+        return fs.readdirSync(__dirname)
             .filter(file => !ignoreList.includes(file))
             .join(', ');
-        
-        return files;
     } catch (error) {
-        console.error('Error al leer el contexto del proyecto:', error.message);
         return 'No se pudo leer el contexto.';
     }
 }
 
 /**
- * Realiza una prueba de conexión y salud de la IA antes de proceder.
- * Verifica la existencia de system_fingerprint si está disponible.
+ * Realiza el autodiagnóstico inicial.
  */
 async function runSelfTest() {
     console.log('🔍 Iniciando autodiagnóstico...');
@@ -34,49 +40,35 @@ async function runSelfTest() {
             model: 'llama-3.3-70b-versatile',
             max_tokens: 5
         });
-
-        // Verificamos si la respuesta es válida
-        if (!testResponse || !testResponse.choices) {
-            throw new Error('Respuesta de prueba inválida o nula.');
-        }
-
-        // Aunque algunos modelos pueden retornar null en system_fingerprint,
-        // validamos que la estructura básica de la sesión sea consistente.
-        const fingerprint = testResponse.system_fingerprint || 'fp_standard_session';
-        console.log(`✅ Autodiagnóstico exitoso. Fingerprint: ${fingerprint}`);
-
+        const fingerprint = testResponse.system_fingerprint || 'fp_active_session';
+        console.log(`✅ Conexión establecida. Fingerprint: ${fingerprint}\n`);
     } catch (error) {
-        console.error('❌ FALLO CRÍTICO EN AUTODIAGNÓSTICO:', error.message);
+        console.error('❌ FALLO CRÍTICO:', error.message);
         process.exit(1);
     }
 }
 
 /**
- * Lógica principal del chat con monitoreo de presupuesto de tokens.
+ * Procesa una interacción completa con la IA, incluyendo herramientas.
  */
-async function main() {
-    // 1. Ejecutar test inicial
-    await runSelfTest();
-
-    // 2. Obtener contexto
+async function processInteraction(userInput) {
     const projectFiles = readProjectContext();
-    const systemPrompt = `Eres un asistente de desarrollo. Los archivos actuales en el proyecto son: ${projectFiles}.`;
+    const systemPrompt = { 
+        role: 'system', 
+        content: `Eres un asistente de desarrollo. Archivos actuales: ${projectFiles}. Tienes capacidad de leer y escribir archivos.` 
+    };
 
-    console.log('🚀 Enviando consulta principal...');
+    // Aseguramos que el system prompt siempre sea el primero
+    if (conversationHistory.length === 0 || conversationHistory[0].role !== 'system') {
+        conversationHistory.unshift(systemPrompt);
+    }
+
+    conversationHistory.push({ role: 'user', content: userInput });
+    logAction('Pregunta', userInput);
 
     try {
-        // Capturamos el mensaje desde la terminal o usamos uno por defecto
-        const userQuestion = process.argv.slice(2).join(' ') || 
-                            'Basado en los archivos que ves, ¿qué crees que estamos construyendo?';
-
-        const messages = [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userQuestion }
-        ];
-
-
-        const response = await groq.chat.completions.create({
-            messages: messages,
+        let response = await groq.chat.completions.create({
+            messages: conversationHistory,
             model: 'llama-3.3-70b-versatile',
             tools: toolsDefinition,
             tool_choice: 'auto'
@@ -85,21 +77,25 @@ async function main() {
         let responseMessage = response.choices[0].message;
         const toolCalls = responseMessage.tool_calls;
 
-        // Si la IA decide usar una herramienta
         if (toolCalls) {
-            console.log('🛠️ IA solicitó ejecutar herramientas...');
-            messages.push(responseMessage); // Añadir el mensaje de solicitud de la IA
+            console.log('🛠️  Ejecutando herramientas...');
+            conversationHistory.push(responseMessage);
 
             for (const toolCall of toolCalls) {
                 const functionName = toolCall.function.name;
-                const functionArgs = JSON.parse(toolCall.function.arguments);
+                const args = JSON.parse(toolCall.function.arguments);
+
+                logAction('Tool_Call', { function: functionName, args });
 
                 let result = '';
                 if (functionName === 'readFileContent') {
-                    result = readFileContent(functionArgs.filePath);
+                    result = readFileContent(args.filePath);
+                } else if (functionName === 'createOrUpdateFile') {
+                    result = createOrUpdateFile(args.filePath, args.content);
+                    logAction('Escritura', { file: args.filePath });
                 }
 
-                messages.push({
+                conversationHistory.push({
                     tool_call_id: toolCall.id,
                     role: 'tool',
                     name: functionName,
@@ -107,9 +103,8 @@ async function main() {
                 });
             }
 
-            // Segunda llamada para procesar los resultados de las herramientas
             const secondResponse = await groq.chat.completions.create({
-                messages: messages,
+                messages: conversationHistory,
                 model: 'llama-3.3-70b-versatile'
             });
 
@@ -117,24 +112,65 @@ async function main() {
         }
 
         const content = responseMessage.content;
-        const totalTokens = response.usage.total_tokens;
+        const tokens = response.usage.total_tokens;
 
+        console.log(`\n🤖 IA: ${content}\n`);
+        logAction('Respuesta', { content, tokens });
 
-        // 3. Verificación de Presupuesto de Tokens
-        if (totalTokens > 1500) {
-            console.warn(`\x1b[33m⚠️ ALERTA DE COSTO: Límite de tokens excedido (Actual: ${totalTokens})\x1b[0m`);
-        } else {
-            console.log(`📊 Consumo de tokens: ${totalTokens}`);
+        if (tokens > 1500) {
+            console.warn(`\x1b[33m⚠️  ALERTA DE COSTO: Límite de tokens excedido (${tokens})\x1b[0m`);
         }
 
-        console.log('\n--- RESPUESTA DE LA IA ---');
-        console.log(content);
-        console.log('--------------------------\n');
+        conversationHistory.push(responseMessage);
+
+        // Optimización de memoria (Keep last MAX_MEMORY messages)
+        if (conversationHistory.length > MAX_MEMORY) {
+            conversationHistory = [
+                conversationHistory[0], // Mantener siempre el system prompt
+                ...conversationHistory.slice(-(MAX_MEMORY - 1))
+            ];
+        }
 
     } catch (error) {
-        console.error('Error durante la consulta principal:', error.message);
+        logAction('Error', error.message);
+        console.error('❌ Error:', error.message);
     }
 }
 
-// Ejecución
-main();
+/**
+ * Bucle Principal REPL
+ */
+async function startApp() {
+    await runSelfTest();
+    
+    console.log('--- AGENTE INTERACTIVO ACTIVO ---');
+    console.log('Comandos: "salir" o "exit" para cerrar | "/clear" para resetear memoria\n');
+
+    rl.prompt();
+
+    rl.on('line', async (line) => {
+        const input = line.trim();
+
+        if (input.toLowerCase() === 'exit' || input.toLowerCase() === 'salir') {
+            console.log('Cerrando sesión. ¡Hasta pronto!');
+            process.exit(0);
+        }
+
+        if (input === '/clear') {
+            conversationHistory = [];
+            console.log('🧹 Memoria reseteada.');
+            rl.prompt();
+            return;
+        }
+
+        if (input) {
+            await processInteraction(input);
+        }
+
+        rl.prompt();
+    }).on('close', () => {
+        process.exit(0);
+    });
+}
+
+startApp();
