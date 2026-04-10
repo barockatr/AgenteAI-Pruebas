@@ -1,8 +1,10 @@
+#!/usr/bin/env node
 const fs = require('fs');
 const readline = require('readline');
 const groq = require('./client');
-const { toolsDefinition, readFileContent, createOrUpdateFile } = require('./tools');
+const { toolsDefinition, readFileContent, createOrUpdateFile, listDirectoryRecursive } = require('./tools');
 const { logAction } = require('./logger');
+
 
 // Configuración de la interfaz de consola
 const rl = readline.createInterface({
@@ -16,18 +18,16 @@ let conversationHistory = [];
 const MAX_MEMORY = 15;
 
 /**
- * Escanea el directorio actual para obtener el contexto de archivos.
+ * Obtiene el mapa jerárquico del proyecto.
  */
-function readProjectContext() {
+function getProjectMap() {
     try {
-        const ignoreList = ['node_modules', '.git', 'package-lock.json', 'agent.log'];
-        return fs.readdirSync(__dirname)
-            .filter(file => !ignoreList.includes(file))
-            .join(', ');
+        return listDirectoryRecursive();
     } catch (error) {
-        return 'No se pudo leer el contexto.';
+        return 'No se pudo leer el mapa del proyecto.';
     }
 }
+
 
 /**
  * Realiza el autodiagnóstico inicial.
@@ -52,11 +52,12 @@ async function runSelfTest() {
  * Procesa una interacción completa con la IA, incluyendo herramientas.
  */
 async function processInteraction(userInput) {
-    const projectFiles = readProjectContext();
+    const projectMap = getProjectMap();
     const systemPrompt = { 
         role: 'system', 
-        content: `Eres un asistente de desarrollo. Archivos actuales: ${projectFiles}. Tienes capacidad de leer y escribir archivos.` 
+        content: `Eres un asistente de desarrollo. Estructura actual del proyecto:\n${projectMap}\n\nTienes capacidad de leer y escribir archivos.` 
     };
+
 
     // Aseguramos que el system prompt siempre sea el primero
     if (conversationHistory.length === 0 || conversationHistory[0].role !== 'system') {
@@ -93,7 +94,10 @@ async function processInteraction(userInput) {
                 } else if (functionName === 'createOrUpdateFile') {
                     result = createOrUpdateFile(args.filePath, args.content);
                     logAction('Escritura', { file: args.filePath });
+                } else if (functionName === 'listDirectoryRecursive') {
+                    result = listDirectoryRecursive();
                 }
+
 
                 conversationHistory.push({
                     tool_call_id: toolCall.id,
