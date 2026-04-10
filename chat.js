@@ -9,6 +9,14 @@ import { toolsDefinition, readFileContent, createOrUpdateFile, listDirectoryRecu
 import { logAction } from './logger.js';
 import { speak } from './speaker.js';
 import { listenAndTranscribe } from './listener.js';
+import { startWatchdog } from './watchdog.js';
+
+// Modelos Groq
+const MODEL_CHAT = 'llama3-8b-8192';
+const MODEL_ARCHITECT = 'llama3-70b-8192';
+
+let sessionTokens = 0;
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -63,8 +71,9 @@ async function runSelfTest() {
 /** 
  * Auditoría profunda (Arquitecto)
  */
-async function performAudit(filePath) {
-    console.log(`🔎 Auditando ${filePath}...`);
+export async function performAudit(filePath, silent = false) {
+    if (!silent) console.log(`🔎 Auditando ${filePath}...`);
+
     try {
         const content = await readFileContent(filePath);
         if (content.startsWith('Error') || content.startsWith('Acceso')) return content;
@@ -77,14 +86,18 @@ async function performAudit(filePath) {
                 },
                 { role: 'user', content: `Audita:\n\n${content}` }
             ],
-            model: 'llama-3.3-70b-versatile'
+            model: MODEL_ARCHITECT
         });
 
         const auditResult = auditResponse.choices[0].message.content;
+        sessionTokens += auditResponse.usage.total_tokens;
         await logAction('Auditoría', { file: filePath, result: auditResult });
 
-        const summary = auditResult.split('\n').filter(l => l.trim()).slice(0, 2).join(' ');
-        speak(`Atención. He auditado ${filePath}. ${summary}`);
+        if (!silent) {
+            const summary = auditResult.split('\n').filter(l => l.trim()).slice(0, 2).join(' ');
+            speak(`Atención. He auditado ${filePath}. ${summary}`);
+        }
+
 
         return `### Revisión de Arquitectura para ${filePath}:\n${auditResult}`;
     } catch (error) {
@@ -117,13 +130,15 @@ async function processInteraction(userInput) {
     try {
         let response = await groq.chat.completions.create({
             messages: conversationHistory,
-            model: 'llama-3.3-70b-versatile',
+            model: MODEL_CHAT,
             tools: toolsDefinition,
             tool_choice: 'auto'
         });
 
         let responseMessage = response.choices[0].message;
+        sessionTokens += response.usage.total_tokens;
         const toolCalls = responseMessage.tool_calls;
+
 
         if (toolCalls) {
             console.log('🛠️  Ejecutando herramientas (Async)...');
@@ -153,10 +168,12 @@ async function processInteraction(userInput) {
 
             const secondResponse = await groq.chat.completions.create({
                 messages: conversationHistory,
-                model: 'llama-3.3-70b-versatile'
+                model: MODEL_ARCHITECT
             });
             responseMessage = secondResponse.choices[0].message;
+            sessionTokens += secondResponse.usage.total_tokens;
         }
+
 
         const content = responseMessage.content;
         console.log(`\n🤖 IA: ${content}\n`);
@@ -184,8 +201,10 @@ async function processInteraction(userInput) {
  */
 async function startApp() {
     await runSelfTest();
-    console.log('--- AGENTE REFACTORIZADO (ESM/ASYNC) ACTIVO ---');
-    console.log('Comandos: salir, exit, /clear, /voice\n');
+    startWatchdog(); // Inicia el Guardián automáticamente
+    console.log('--- AGENTE INTELIGENTE (WATCHDOG/STRATEGIST) ACTIVO ---');
+    console.log('Comandos: salir, exit, /clear, /voice, /usage\n');
+
     rl.prompt();
 
     rl.on('line', async (line) => {
@@ -194,7 +213,10 @@ async function startApp() {
         if (input === '/clear') {
             conversationHistory = [];
             console.log('🧹 Memoria limpia.');
+        } else if (input === '/usage') {
+            console.log(`📊 Consumo de sesión: ${sessionTokens} tokens.`);
         } else if (input.toLowerCase() === '/voice') {
+
             const transcript = await listenAndTranscribe();
             if (transcript) {
                 console.log(`🎤 Dicho: "${transcript}"`);
