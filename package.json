@@ -1,12 +1,13 @@
 {
   "name": "agenteia-pruebas",
   "version": "1.0.0",
+  "type": "module",
   "main": "index.js",
+
   "bin": {
     "agente": "./chat.js"
   },
   "scripts": {
-
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -15,6 +16,8 @@
   "description": "",
   "dependencies": {
     "dotenv": "^17.4.1",
-    "groq-sdk": "^1.1.2"
+    "groq-sdk": "^1.1.2",
+    "mic": "^2.1.2",
+    "say": "^0.16.0"
   }
 }

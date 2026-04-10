@@ -1,5 +1,5 @@
-require('dotenv').config();
-const Groq = require('groq-sdk');
+import 'dotenv/config';
+import Groq from 'groq-sdk';
 
 /**
  * Inicializa y configura el cliente de Groq.
@@ -13,17 +13,16 @@ function initializeGroqClient() {
             throw new Error('La variable de entorno GROQ_API_KEY no está definida en el archivo .env');
         }
 
-        // Retornamos la instancia del cliente para uso global
         return new Groq({
             apiKey: apiKey
         });
 
     } catch (error) {
         console.error('Error al inicializar el cliente de Groq:', error.message);
-        process.exit(1); // Detenemos la ejecución si no hay configuración válida
+        process.exit(1);
     }
 }
 
 const groq = initializeGroqClient();
 
-module.exports = groq;
+export default groq;

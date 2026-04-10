@@ -1,39 +1,51 @@
 #!/usr/bin/env node
-const fs = require('fs');
-const readline = require('readline');
-const groq = require('./client');
-const { toolsDefinition, readFileContent, createOrUpdateFile, listDirectoryRecursive } = require('./tools');
-const { logAction } = require('./logger');
+import fs from 'fs';
+import readline from 'readline';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
+import groq from './client.js';
+import { toolsDefinition, readFileContent, createOrUpdateFile, listDirectoryRecursive, updateArchitectureDocs } from './tools.js';
+import { logAction } from './logger.js';
+import { speak } from './speaker.js';
+import { listenAndTranscribe } from './listener.js';
 
-// Configuración de la interfaz de consola
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const ARCHITECT_RULES = `
+- PROHIBIDO usar 'var'. Usa siempre 'const' o 'let'.
+- Prioridad absoluta a ESM (ES Modules) sobre CommonJS.
+- Principio de Responsabilidad Única: Funciones cortas y específicas.
+- Seguridad: No usar innerHTML (riesgo XSS).
+- Rendimiento: Preferir funciones asíncronas (No bloqueantes).
+`;
+
 const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
     prompt: 'Tú > '
 });
 
-// Estado global de la sesión
 let conversationHistory = [];
 const MAX_MEMORY = 15;
 
-/**
- * Obtiene el mapa jerárquico del proyecto.
+/** 
+ * Obtiene el mapa del proyecto (Async)
  */
-function getProjectMap() {
+async function getProjectMap() {
     try {
-        return listDirectoryRecursive();
+        return await listDirectoryRecursive();
     } catch (error) {
-        return 'No se pudo leer el mapa del proyecto.';
+        return 'No se pudo leer el mapa.';
     }
 }
 
-
-/**
- * Realiza el autodiagnóstico inicial.
+/** 
+ * Autodiagnóstico Inicial (ESM/Async)
  */
 async function runSelfTest() {
-    console.log('🔍 Iniciando autodiagnóstico...');
+    console.log('🔍 Iniciando autodiagnóstico (Async/ESM)...');
     try {
         const testResponse = await groq.chat.completions.create({
             messages: [{ role: 'user', content: 'ping' }],
@@ -48,24 +60,59 @@ async function runSelfTest() {
     }
 }
 
-/**
- * Procesa una interacción completa con la IA, incluyendo herramientas.
+/** 
+ * Auditoría profunda (Arquitecto)
+ */
+async function performAudit(filePath) {
+    console.log(`🔎 Auditando ${filePath}...`);
+    try {
+        const content = await readFileContent(filePath);
+        if (content.startsWith('Error') || content.startsWith('Acceso')) return content;
+
+        const auditResponse = await groq.chat.completions.create({
+            messages: [
+                { 
+                    role: 'system', 
+                    content: `Eres un Arquitecto de Software Senior. Analiza buscando: Vulnerabilidades, Rendimiento, Clean Code.\nReglas:\n${ARCHITECT_RULES}` 
+                },
+                { role: 'user', content: `Audita:\n\n${content}` }
+            ],
+            model: 'llama-3.3-70b-versatile'
+        });
+
+        const auditResult = auditResponse.choices[0].message.content;
+        await logAction('Auditoría', { file: filePath, result: auditResult });
+
+        const summary = auditResult.split('\n').filter(l => l.trim()).slice(0, 2).join(' ');
+        speak(`Atención. He auditado ${filePath}. ${summary}`);
+
+        return `### Revisión de Arquitectura para ${filePath}:\n${auditResult}`;
+    } catch (error) {
+        return `Error: ${error.message}`;
+    }
+}
+
+/** 
+ * Turno de Chat
  */
 async function processInteraction(userInput) {
-    const projectMap = getProjectMap();
+    const projectMap = await getProjectMap();
     const systemPrompt = { 
         role: 'system', 
-        content: `Eres un asistente de desarrollo. Estructura actual del proyecto:\n${projectMap}\n\nTienes capacidad de leer y escribir archivos.` 
+        content: `Eres un asistente Senior (ESM/Async). Mapa del proyecto:\n${projectMap}
+        
+        REGLAS ADN:
+        ${ARCHITECT_RULES}
+        
+        PROACTIVIDAD: Al modificar archivos, incluye 'Revisión de Arquitectura'. Si el hallazgo es importante, usa 'updateArchitectureDocs'.` 
     };
 
-
-    // Aseguramos que el system prompt siempre sea el primero
     if (conversationHistory.length === 0 || conversationHistory[0].role !== 'system') {
         conversationHistory.unshift(systemPrompt);
     }
 
     conversationHistory.push({ role: 'user', content: userInput });
-    logAction('Pregunta', userInput);
+    await logAction('Pregunta', userInput);
 
     try {
         let response = await groq.chat.completions.create({
@@ -79,30 +126,27 @@ async function processInteraction(userInput) {
         const toolCalls = responseMessage.tool_calls;
 
         if (toolCalls) {
-            console.log('🛠️  Ejecutando herramientas...');
+            console.log('🛠️  Ejecutando herramientas (Async)...');
             conversationHistory.push(responseMessage);
 
             for (const toolCall of toolCalls) {
-                const functionName = toolCall.function.name;
-                const args = JSON.parse(toolCall.function.arguments);
-
-                logAction('Tool_Call', { function: functionName, args });
-
+                const { name, arguments: argsJson } = toolCall.function;
+                const args = JSON.parse(argsJson);
                 let result = '';
-                if (functionName === 'readFileContent') {
-                    result = readFileContent(args.filePath);
-                } else if (functionName === 'createOrUpdateFile') {
-                    result = createOrUpdateFile(args.filePath, args.content);
-                    logAction('Escritura', { file: args.filePath });
-                } else if (functionName === 'listDirectoryRecursive') {
-                    result = listDirectoryRecursive();
-                }
 
+                console.log(`  └─ Herramienta: ${name}`);
+                await logAction('Tool_Call', { function: name, args });
+
+                if (name === 'readFileContent') result = await readFileContent(args.filePath);
+                else if (name === 'createOrUpdateFile') result = await createOrUpdateFile(args.filePath, args.content);
+                else if (name === 'listDirectoryRecursive') result = await listDirectoryRecursive();
+                else if (name === 'auditFile') result = await performAudit(args.filePath);
+                else if (name === 'updateArchitectureDocs') result = await updateArchitectureDocs(args.issue, args.fix);
 
                 conversationHistory.push({
                     tool_call_id: toolCall.id,
                     role: 'tool',
-                    name: functionName,
+                    name: name,
                     content: result
                 });
             }
@@ -111,69 +155,55 @@ async function processInteraction(userInput) {
                 messages: conversationHistory,
                 model: 'llama-3.3-70b-versatile'
             });
-
             responseMessage = secondResponse.choices[0].message;
         }
 
         const content = responseMessage.content;
-        const tokens = response.usage.total_tokens;
-
         console.log(`\n🤖 IA: ${content}\n`);
-        logAction('Respuesta', { content, tokens });
+        await logAction('Respuesta', { content, tokens: response.usage.total_tokens });
 
-        if (tokens > 1500) {
-            console.warn(`\x1b[33m⚠️  ALERTA DE COSTO: Límite de tokens excedido (${tokens})\x1b[0m`);
+        if (content.includes('Revisión de Arquitectura')) {
+            const architectPart = content.split('Revisión de Arquitectura')[1];
+            const summary = architectPart.split('\n').filter(l => l.trim()).slice(0, 2).join(' ');
+            speak(`Arquitecto informa. ${summary}`);
         }
 
         conversationHistory.push(responseMessage);
-
-        // Optimización de memoria (Keep last MAX_MEMORY messages)
         if (conversationHistory.length > MAX_MEMORY) {
-            conversationHistory = [
-                conversationHistory[0], // Mantener siempre el system prompt
-                ...conversationHistory.slice(-(MAX_MEMORY - 1))
-            ];
+            conversationHistory = [conversationHistory[0], ...conversationHistory.slice(-(MAX_MEMORY - 1))];
         }
 
     } catch (error) {
-        logAction('Error', error.message);
+        await logAction('Error', error.message);
         console.error('❌ Error:', error.message);
     }
 }
 
 /**
- * Bucle Principal REPL
+ * REPL
  */
 async function startApp() {
     await runSelfTest();
-    
-    console.log('--- AGENTE INTERACTIVO ACTIVO ---');
-    console.log('Comandos: "salir" o "exit" para cerrar | "/clear" para resetear memoria\n');
-
+    console.log('--- AGENTE REFACTORIZADO (ESM/ASYNC) ACTIVO ---');
+    console.log('Comandos: salir, exit, /clear, /voice\n');
     rl.prompt();
 
     rl.on('line', async (line) => {
         const input = line.trim();
-
-        if (input.toLowerCase() === 'exit' || input.toLowerCase() === 'salir') {
-            console.log('Cerrando sesión. ¡Hasta pronto!');
-            process.exit(0);
-        }
-
+        if (input.toLowerCase() === 'exit' || input.toLowerCase() === 'salir') process.exit(0);
         if (input === '/clear') {
             conversationHistory = [];
-            console.log('🧹 Memoria reseteada.');
-            rl.prompt();
-            return;
-        }
-
-        if (input) {
+            console.log('🧹 Memoria limpia.');
+        } else if (input.toLowerCase() === '/voice') {
+            const transcript = await listenAndTranscribe();
+            if (transcript) {
+                console.log(`🎤 Dicho: "${transcript}"`);
+                await processInteraction(transcript);
+            }
+        } else if (input) {
             await processInteraction(input);
         }
-
         rl.prompt();
-    }).on('close', () => {
-        process.exit(0);
     });
 }
 

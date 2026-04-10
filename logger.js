@@ -1,22 +1,20 @@
-const fs = require('fs');
-const path = require('path');
+import { appendFile } from 'fs/promises';
+import { join } from 'path';
 
-const LOG_FILE = path.join(process.cwd(), 'agent.log');
+const LOG_FILE = join(process.cwd(), 'agent.log');
 
 /**
- * Registra un evento en el archivo de auditoría agent.log.
- * @param {string} eventType - Tipo de evento (Pregunta, Respuesta, Tool_Call, Error).
+ * Registra un evento en el archivo de auditoría agent.log de forma asíncrona.
+ * @param {string} eventType - Tipo de evento.
  * @param {any} data - Información adicional a registrar.
  */
-function logAction(eventType, data) {
+export async function logAction(eventType, data) {
     try {
         const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
         const logEntry = `[${timestamp}] [${eventType.toUpperCase()}] ${typeof data === 'object' ? JSON.stringify(data) : data}\n`;
 
-        fs.appendFileSync(LOG_FILE, logEntry, 'utf8');
+        await appendFile(LOG_FILE, logEntry, 'utf8');
     } catch (error) {
         console.error('Error al escribir en el log:', error.message);
     }
 }
-
-module.exports = { logAction };
