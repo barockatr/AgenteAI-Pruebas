@@ -15,7 +15,7 @@
 *   🛡️ **Shield Guard (Sentinel):** Proactive file system monitoring powered by **[Chokidar](https://github.com/paulmillr/chokidar)** — the industry-standard file watcher for Node.js. Detects changes in your documents (`.js`, `.css`, etc.) and executes an instant security and architecture audit using the 70B model, entirely in the background.
 *   🧠 **Smart Orchestrator:** Intelligent model routing. Relies on **Llama-3.1-8B-Instant** for ultra-low latency conversational interactions, automatically scaling to **Llama-3.3-70B-Versatile** for deep reasoning, heavy code reviews, or crucial architectural decisions.
 *   🌐 **Web Investigator:** Connected in real-time with the **Tavily API**. The assistant autonomously invokes internet searches the moment it detects a prompt regarding new libraries, unknown errors, or when it requires external documentation outside its local knowledge base.
-*   🗣️ **Voice of Authority:** Advanced TTS (Text-to-Speech) system that proactively reports findings from the Sentinel or confirms when web investigations are complete. Forget visual fatigue; let the assistant notify you audibly.
+*   🗣️ **Voice of Authority:** Advanced TTS (Text-to-Speech) Asystem that proactively reports findings from the Sentinel or confirms when web investigations are complete. Forget visual fatigue; let the assistant notify you audibly.
 
 ---
 
