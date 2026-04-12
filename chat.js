@@ -11,6 +11,7 @@ import { speak } from './speaker.js';
 import { listenAndTranscribe } from './listener.js';
 import { vigilancia } from './watchdog.js';
 import { webSearch } from './researcher.js';
+import { withRetry } from './retry.js';
 import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -24,6 +25,19 @@ const MODEL_CHAT = 'llama-3.1-8b-instant';
 const MODEL_ARCHITECT = 'llama-3.3-70b-versatile';
 
 let sessionTokens = 0;
+
+/**
+ * Tool Registry — Maps tool names to their handler functions.
+ * Adding a new tool = one line here + one entry in toolsDefinition (tools.js).
+ */
+const toolRegistry = {
+    readFileContent:        (args) => readFileContent(args.filePath),
+    createOrUpdateFile:     (args) => createOrUpdateFile(args.filePath, args.content),
+    listDirectoryRecursive: ()     => listDirectoryRecursive(),
+    auditFile:              (args) => performAudit(args.filePath),
+    updateArchitectureDocs: (args) => updateArchitectureDocs(args.issue, args.fix),
+    webSearch:              (args) => webSearch(args.query),
+};
 
 
 
@@ -78,11 +92,11 @@ async function getProjectMap() {
 async function runSelfTest() {
     console.log('🔍 Starting self-diagnostic (Async/ESM)...');
     try {
-        const testResponse = await groq.chat.completions.create({
+        const testResponse = await withRetry(() => groq.chat.completions.create({
             messages: [{ role: 'user', content: 'ping' }],
             model: 'llama-3.3-70b-versatile',
             max_tokens: 5
-        });
+        }));
         const fingerprint = testResponse.system_fingerprint || 'fp_active_session';
         console.log(`✅ Connection established. Fingerprint: ${fingerprint}\n`);
     } catch (error) {
@@ -101,7 +115,7 @@ export async function performAudit(filePath, silent = false) {
         const content = await readFileContent(filePath);
         if (content.startsWith('Error') || content.startsWith('Acceso')) return content;
 
-        const auditResponse = await groq.chat.completions.create({
+        const auditResponse = await withRetry(() => groq.chat.completions.create({
             messages: [
                 { 
                     role: 'system', 
@@ -110,7 +124,7 @@ export async function performAudit(filePath, silent = false) {
                 { role: 'user', content: `Audit:\n\n${content}` }
             ],
             model: MODEL_ARCHITECT
-        });
+        }));
 
         const auditResult = auditResponse.choices[0].message.content;
         sessionTokens += auditResponse.usage.total_tokens;
@@ -146,12 +160,12 @@ async function processInteraction(userInput) {
     await logAction('Question', userInput);
 
     try {
-        let response = await groq.chat.completions.create({
+        let response = await withRetry(() => groq.chat.completions.create({
             messages: conversationHistory,
             model: MODEL_CHAT,
             tools: toolsDefinition,
             tool_choice: 'auto'
-        });
+        }));
 
         let responseMessage = response.choices[0].message;
         sessionTokens += response.usage.total_tokens;
@@ -177,12 +191,12 @@ async function processInteraction(userInput) {
                 console.log(`  └─ Tool: ${name}`);
                 await logAction('Tool_Call', { function: name, args });
 
-                if (name === 'readFileContent') result = await readFileContent(args.filePath);
-                else if (name === 'createOrUpdateFile') result = await createOrUpdateFile(args.filePath, args.content);
-                else if (name === 'listDirectoryRecursive') result = await listDirectoryRecursive();
-                else if (name === 'auditFile') result = await performAudit(args.filePath);
-                else if (name === 'updateArchitectureDocs') result = await updateArchitectureDocs(args.issue, args.fix);
-                else if (name === 'webSearch') result = await webSearch(args.query);
+                const handler = toolRegistry[name];
+                if (handler) {
+                    result = await handler(args);
+                } else {
+                    result = `Error: Unknown tool "${name}"`;
+                }
 
                 conversationHistory.push({
                     tool_call_id: callId,
@@ -192,10 +206,10 @@ async function processInteraction(userInput) {
                 });
             }
 
-            const secondResponse = await groq.chat.completions.create({
+            const secondResponse = await withRetry(() => groq.chat.completions.create({
                 messages: conversationHistory,
                 model: MODEL_ARCHITECT
-            });
+            }));
             responseMessage = secondResponse.choices[0].message;
             sessionTokens += secondResponse.usage.total_tokens;
         }
