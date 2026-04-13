@@ -1,13 +1,14 @@
-FROM node:20-alpine
+FROM node:20-slim
 
 # Set the working directory for the agent code
 WORKDIR /app
+RUN apt-get update && apt-get install -y libstdc++6 && rm -rf /var/lib/apt/lists/*
 
 # Copy package configurations first to leverage Docker cache
-COPY package.json package-lock.json ./
+COPY package*.json ./
 
 # Install dependencies (ignoring scripts if any)
-RUN npm install --ignore-scripts
+RUN npm install 
 
 # Copy the rest of the agent code
 COPY . .

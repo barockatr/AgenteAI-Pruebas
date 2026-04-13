@@ -2,7 +2,7 @@
 import fs from 'fs';
 import readline from 'readline';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { join, dirname } from 'path';
 
 import groq from './client.js';
 import { toolsDefinition, readFileContent, createOrUpdateFile, listDirectoryRecursive, updateArchitectureDocs } from './tools.js';
@@ -13,7 +13,7 @@ import { vigilancia } from './watchdog.js';
 import { webSearch } from './researcher.js';
 import { withRetry } from './retry.js';
 import { memoryStore } from './memory.js';
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -32,12 +32,12 @@ let sessionTokens = 0;
  * Adding a new tool = one line here + one entry in toolsDefinition (tools.js).
  */
 const toolRegistry = {
-    readFileContent:        (args) => readFileContent(args.filePath),
-    createOrUpdateFile:     (args) => createOrUpdateFile(args.filePath, args.content),
-    listDirectoryRecursive: ()     => listDirectoryRecursive(),
-    auditFile:              (args) => performAudit(args.filePath),
+    readFileContent: (args) => readFileContent(args.filePath),
+    createOrUpdateFile: (args) => createOrUpdateFile(args.filePath, args.content),
+    listDirectoryRecursive: () => listDirectoryRecursive(),
+    auditFile: (args) => performAudit(args.filePath),
     updateArchitectureDocs: (args) => updateArchitectureDocs(args.issue, args.fix),
-    webSearch:              (args) => webSearch(args.query),
+    webSearch: (args) => webSearch(args.query),
 };
 
 
@@ -118,9 +118,9 @@ export async function performAudit(filePath, silent = false) {
 
         const auditResponse = await withRetry(() => groq.chat.completions.create({
             messages: [
-                { 
-                    role: 'system', 
-                    content: `Eres un Ingeniero Senior & Arquitecto de Software. Analiza el código buscando vulnerabilidades, rendimiento y limpieza.\n\nREGLAS DE ARQUITECTURA:\n${ARCHITECT_RULES}` 
+                {
+                    role: 'system',
+                    content: `Eres un Ingeniero Senior & Arquitecto de Software. Analiza el código buscando vulnerabilidades, rendimiento y limpieza.\n\nREGLAS DE ARQUITECTURA:\n${ARCHITECT_RULES}`
                 },
                 { role: 'user', content: `Audit:\n\n${content}` }
             ],
@@ -154,9 +154,9 @@ async function processInteraction(userInput) {
         memoryContext = '\n[Memoria a Largo Plazo Relevante]:\n' + memories.map(m => `- [${m.file_context}] ${m.text}`).join('\n');
     }
 
-    const systemPrompt = { 
-        role: 'system', 
-        content: `Eres un Asistente Senior de Ingeniería. Usa las herramientas con autonomía y precisión.\n\nMapa del proyecto:\n${projectMap}${memoryContext}\n\nREGLAS DE ARQUITECTURA:\n${ARCHITECT_RULES}` 
+    const systemPrompt = {
+        role: 'system',
+        content: `Eres un Asistente Senior de Ingeniería. Usa las herramientas con autonomía y precisión.\n\nMapa del proyecto:\n${projectMap}${memoryContext}\n\nREGLAS DE ARQUITECTURA:\n${ARCHITECT_RULES}`
     };
 
     if (conversationHistory.length === 0 || conversationHistory[0].role !== 'system') {
@@ -181,7 +181,7 @@ async function processInteraction(userInput) {
         const latencyMs = Date.now() - timeStart;
         sessionTokens += response.usage.total_tokens;
         await logAction('Inferencia', { latency_ms: latencyMs, tokens: response.usage.total_tokens });
-        
+
         const toolCalls = responseMessage.tool_calls;
 
 
@@ -239,7 +239,7 @@ async function processInteraction(userInput) {
         }
 
         conversationHistory.push(responseMessage);
-        
+
         if (conversationHistory.length > MAX_MEMORY) {
             conversationHistory = [conversationHistory[0], ...conversationHistory.slice(-(MAX_MEMORY - 1))];
         }
@@ -259,9 +259,9 @@ async function processInteraction(userInput) {
 async function startApp() {
     await memoryStore.init(); // Inicializar RAG
     await runSelfTest();
-    
+
     vigilancia.iniciar(); // Inicia Vigilancia
-    
+
     // Conectar el watcher asíncronamente
     vigilancia.events.on('changesDetected', async (summary) => {
         console.log(`\n🔔 [Agente] Eventos FS detectados asíncronamente: ${summary}`);
