@@ -12,6 +12,7 @@ import { listenAndTranscribe } from './listener.js';
 import { vigilancia } from './watchdog.js';
 import { webSearch } from './researcher.js';
 import { withRetry } from './retry.js';
+import { memoryStore } from './memory.js';
 import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -147,17 +148,26 @@ export async function performAudit(filePath, silent = false) {
  */
 async function processInteraction(userInput) {
     const projectMap = await getProjectMap();
+    const memories = await memoryStore.searchSimilar(userInput);
+    let memoryContext = '';
+    if (memories.length > 0) {
+        memoryContext = '\n[Memoria a Largo Plazo Relevante]:\n' + memories.map(m => `- [${m.file_context}] ${m.text}`).join('\n');
+    }
+
     const systemPrompt = { 
         role: 'system', 
-        content: `Eres un Asistente Senior de Ingeniería. Usa las herramientas con autonomía y precisión.\n\nMapa del proyecto:\n${projectMap}\n\nREGLAS DE ARQUITECTURA:\n${ARCHITECT_RULES}` 
+        content: `Eres un Asistente Senior de Ingeniería. Usa las herramientas con autonomía y precisión.\n\nMapa del proyecto:\n${projectMap}${memoryContext}\n\nREGLAS DE ARQUITECTURA:\n${ARCHITECT_RULES}` 
     };
 
     if (conversationHistory.length === 0 || conversationHistory[0].role !== 'system') {
         conversationHistory.unshift(systemPrompt);
+    } else {
+        conversationHistory[0] = systemPrompt; // Actualizar memoria en cada turno
     }
 
     conversationHistory.push({ role: 'user', content: userInput });
     await logAction('Question', userInput);
+    const timeStart = Date.now();
 
     try {
         let response = await withRetry(() => groq.chat.completions.create({
@@ -168,7 +178,10 @@ async function processInteraction(userInput) {
         }));
 
         let responseMessage = response.choices[0].message;
+        const latencyMs = Date.now() - timeStart;
         sessionTokens += response.usage.total_tokens;
+        await logAction('Inferencia', { latency_ms: latencyMs, tokens: response.usage.total_tokens });
+        
         const toolCalls = responseMessage.tool_calls;
 
 
@@ -226,9 +239,13 @@ async function processInteraction(userInput) {
         }
 
         conversationHistory.push(responseMessage);
+        
         if (conversationHistory.length > MAX_MEMORY) {
             conversationHistory = [conversationHistory[0], ...conversationHistory.slice(-(MAX_MEMORY - 1))];
         }
+
+        // Add memory asynchronously
+        await memoryStore.addMemory(`User: ${userInput}\nAI: ${content || 'Utilizó herramientas'}`, 'chat_repl');
 
     } catch (error) {
         await logAction('Error', error.message);
@@ -240,8 +257,18 @@ async function processInteraction(userInput) {
  * REPL
  */
 async function startApp() {
+    await memoryStore.init(); // Inicializar RAG
     await runSelfTest();
-    vigilancia.iniciar(); // Inicia Vigilancia Automáticamente
+    
+    vigilancia.iniciar(); // Inicia Vigilancia
+    
+    // Conectar el watcher asíncronamente
+    vigilancia.events.on('changesDetected', async (summary) => {
+        console.log(`\n🔔 [Agente] Eventos FS detectados asíncronamente: ${summary}`);
+        await processInteraction(`[Automático] He detectado cambios en estos archivos: ${summary}. Analiza e infórmame brevemente si se requiere alguna acción por tu parte.`);
+        rl.prompt();
+    });
+
     console.log('--- INTELLIGENT AGENT (WATCHDOG/STRATEGIST) ACTIVE ---');
     console.log('Commands: exit, /clear, /voice, /usage\n');
 

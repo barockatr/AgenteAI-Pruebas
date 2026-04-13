@@ -1,0 +1,21 @@
+version: "3.8"
+
+services:
+  agente:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: agenteia-sandbox:latest
+    container_name: agenteia_sandbox
+    # Enable TTY and STDIN for interactive REPL (chat.js)
+    stdin_open: true
+    tty: true
+    # We pass the environment variables
+    env_file:
+      - .env
+    # We mount a local "sandbox" folder to the container's /app/sandbox
+    # This prevents the agent from modifying the host machine outside this folder.
+    volumes:
+      - ./sandbox:/app/sandbox
+    # Overwrite the working directory to sandbox if we solely want it to act there, 
+    # but the agent code is in /app, so we keep WORKDIR /app
