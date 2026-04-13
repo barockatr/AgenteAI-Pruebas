@@ -64,7 +64,12 @@ Actúa siempre como un Ingeniero de Software Senior & Arquitecto Full-Stack. Tus
    - Prioridad Técnica: En situaciones de saturación, omitir reportes extensos y priorizar la entrega del código en bloques funcionales que el usuario pueda ir probando.
    - Respuestas Compactas: NUNCA generar explicaciones largas ni informes de arquitectura extensos cuando se esté cerca del límite de tokens. Código funcional primero, documentación después.
 
-7. Resolución Autónoma: Si una herramienta falla, analiza el log, diagnostica el error y ejecuta una solución alternativa de inmediato.
+7. Uso de Herramientas (Manual):
+   Para actuar sobre el sistema, DEBES usar etiquetas XML.
+   Ejemplo: <readFileContent>{"filePath": "memo.js"}</readFileContent>
+   Herramientas: <readFileContent>, <createOrUpdateFile>, <listDirectoryRecursive>, <auditFile>, <webSearch>, <updateArchitectureDocs>.
+
+8. Resolución Autónoma: Si una herramienta falla, analiza el log, diagnostica el error y ejecuta una solución alternativa de inmediato.
 `;
 
 const rl = readline.createInterface({
@@ -172,9 +177,7 @@ async function processInteraction(userInput) {
     try {
         let response = await withRetry(() => groq.chat.completions.create({
             messages: conversationHistory,
-            model: MODEL_CHAT,
-            tools: toolsDefinition,
-            tool_choice: 'auto'
+            model: MODEL_CHAT
         }));
 
         let responseMessage = response.choices[0].message;
@@ -182,11 +185,49 @@ async function processInteraction(userInput) {
         sessionTokens += response.usage.total_tokens;
         await logAction('Inferencia', { latency_ms: latencyMs, tokens: response.usage.total_tokens });
 
-        const toolCalls = responseMessage.tool_calls;
+        let toolCalls = responseMessage.tool_calls || [];
+
+        // --- SISTEMA DE RESILIENCIA ULTRA-ROBUSTO (MEJORADO) ---
+        if (toolCalls.length === 0 && responseMessage.content) {
+            const toolRegex = /<(\w+)>([\s\S]*?)<\/\1>/g;
+            let match;
+            while ((match = toolRegex.exec(responseMessage.content)) !== null) {
+                const name = match[1].trim();
+                const raw = match[2].trim();
+                let args = {};
+
+                // 1. Intentar parsear como JSON
+                try {
+                    args = JSON.parse(raw || '{}');
+                } catch (e) {
+                    // 2. Intentar parsear formato atributo (key="value" o key=value)
+                    const attrRegex = /(\w+)=["']?([^"'\s>]+)["']?/g;
+                    let attrMatch;
+                    let foundAttr = false;
+                    while ((attrMatch = attrRegex.exec(raw)) !== null) {
+                        args[attrMatch[1]] = attrMatch[2];
+                        foundAttr = true;
+                    }
+                    
+                    // 3. Si no hay atributos, intentar limpiar claves de JSON sin comillas
+                    if (!foundAttr && raw.includes(':')) {
+                        try {
+                            const fixedJson = raw.replace(/([{,]\s*)(\w+):/g, '$1"$2":').replace(/'/g, '"');
+                            args = JSON.parse(fixedJson);
+                        } catch (e2) { args = {}; }
+                    }
+                }
+
+                toolCalls.push({
+                    id: `call_resilient_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+                    function: { name, arguments: JSON.stringify(args) }
+                });
+            }
+        }
 
 
-        if (toolCalls) {
-            console.log('🛠️  Executing tools (Async)...');
+        if (toolCalls.length > 0) {
+            console.log('🛠️  Executing tools (Async/Resilient)...');
             conversationHistory.push(responseMessage);
 
             for (const toolCall of toolCalls) {
@@ -201,7 +242,7 @@ async function processInteraction(userInput) {
                 const callId = toolCall.id || `call_${Date.now()}`;
                 let result = '';
 
-                console.log(`  └─ Tool: ${name}`);
+                console.log(`  └─ Tool Detectada: ${name}`);
                 await logAction('Tool_Call', { function: name, args });
 
                 const handler = toolRegistry[name];
